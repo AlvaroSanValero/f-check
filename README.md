@@ -12,5 +12,9 @@ nano f-check
   sudo mv f-check /usr/local/bin/
 
 - Así se ejecuta
+  
 sudo f-check -ndir archivo.py
 sudo f-check mi_proyecto/
+
+
+- Se ha añadido barra de progreso
