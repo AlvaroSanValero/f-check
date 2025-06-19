@@ -1,31 +1,16 @@
 Que hace el script: 
-Guardará una lista de archivos esperados con sus sha256 en un archivo de suma (como checksums.sha256).
 
-Comprobará que los archivos estén en el directorio.
+Comprueba salud de archivos
 
-Validará su integridad comparando las sumas actuales con las originales.
+- Guarda el script como f-check en una carpeta:
+nano f-check
 
-Mostrará un resumen con los resultados.
+- Dale permisos de ejecución:
+  chmod +x f-check
 
-Para ejecutarlo:
+- Muévelo a /usr/local/bin:
+  sudo mv f-check /usr/local/bin/
 
-1. chmod +x f-check
-2. ./f-check -g carpeta/
-3. Transfiere la carpeta a otra máquina.
-4. Después de transferir, verifica en la máquina destino:./f-check carpeta/ esto imprimirá o un OK o FAILED
-
-Ahora se calculan varios tipos de sumas de verificación: md5, sha1, sha256 y sha512
-
-Ahroa comprueba tambien códigos fuente
-Hay que tener instalado: sudo apt install gcc g++ python3 default-jdk
-
-
-./f-check -g proyecto/
-# Genera los checksums
-
-./f-check proyecto/
-# Verifica hashes + estructura de código fuente
-
-
-
-Ejecuta pruebas unitarias si detecta archivos de test, o que busque comentarios obligatorios
+- Así se ejecuta
+sudo f-check -ndir archivo.py
+sudo f-check mi_proyecto/
