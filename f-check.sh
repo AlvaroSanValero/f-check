@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # f-check: Herramienta de análisis de archivos para validación, detección de errores y buenas prácticas
-# Versión: 5.1 (Multiplataforma y comentada)
 
 # ------------------------------
 # Colores para salida en terminal (ANSI escape codes)
