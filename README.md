@@ -18,3 +18,8 @@ Ahora se calculan varios tipos de sumas de verificación: md5, sha1, sha256 y sh
 
 Ahroa comprueba tambien códigos fuente
 Hay que tener instalado: sudo apt install gcc g++ python3 default-jdk
+./f-check -g proyecto/
+# Genera los checksums
+
+./f-check proyecto/
+# Verifica hashes + estructura de código fuente
