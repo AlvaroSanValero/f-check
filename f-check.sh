@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# f-check v4.0
 # Analizador de archivos EXTENDIDO con mejoras adicionales
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[1;34m'; NC='\033[0m'
