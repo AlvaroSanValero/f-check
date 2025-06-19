@@ -23,3 +23,5 @@ Hay que tener instalado: sudo apt install gcc g++ python3 default-jdk
 
 ./f-check proyecto/
 # Verifica hashes + estructura de código fuente
+
+Ejecuta pruebas unitarias si detecta archivos de test, o que busque comentarios obligatorios
