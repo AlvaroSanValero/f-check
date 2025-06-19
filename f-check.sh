@@ -1,28 +1,44 @@
 #!/bin/bash
 
-# f-check: Verifica integridad de archivos usando SHA256
+# f-check: Verifica integridad de archivos con múltiples algoritmos (md5, sha1, sha256, sha512)
 # Uso:
-#   ./f-check -g [directorio]     -> Genera archivo checksums.sha256
-#   ./f-check [directorio]       -> Verifica integridad de archivos
+#   ./f-check -g [directorio]    -> Genera sumas
+#   ./f-check [directorio]       -> Verifica sumas
 
-checksum_file="checksums.sha256"
+# Archivos de sumas por algoritmo
+declare -A sum_files=(
+  [md5]="checksums.md5"
+  [sha1]="checksums.sha1"
+  [sha256]="checksums.sha256"
+  [sha512]="checksums.sha512"
+)
 
 function generar_sumas() {
     dir="$1"
-    echo "[+] Generando sumas SHA256 en '$dir'..."
-    find "$dir" -type f ! -name "$checksum_file" -exec sha256sum "{}" \; > "$dir/$checksum_file"
-    echo "[✓] Sumas guardadas en $checksum_file"
+    echo "[+] Generando sumas en '$dir'..."
+    for algo in "${!sum_files[@]}"; do
+        file="${sum_files[$algo]}"
+        echo "  - Generando $algo..."
+        find "$dir" -type f ! -name "${sum_files[md5]}" ! -name "${sum_files[sha1]}" ! -name "${sum_files[sha256]}" ! -name "${sum_files[sha512]}" \
+            -exec "${algo}sum" "{}" \; > "$dir/$file"
+        echo "    ✓ Guardado en $file"
+    done
+    echo "[✓] Todas las sumas generadas."
 }
 
 function verificar_archivos() {
     dir="$1"
-    if [[ ! -f "$dir/$checksum_file" ]]; then
-        echo "[!] Archivo de sumas no encontrado: $dir/$checksum_file"
-        exit 1
-    fi
-    echo "[+] Verificando archivos en '$dir'..."
     cd "$dir" || exit 1
-    sha256sum -c "$checksum_file"
+    for algo in "${!sum_files[@]}"; do
+        file="${sum_files[$algo]}"
+        if [[ -f "$file" ]]; then
+            echo "[+] Verificando con $algo:"
+            "${algo}sum" -c "$file"
+        else
+            echo "[!] Archivo de suma $file no encontrado. Saltando..."
+        fi
+        echo
+    done
 }
 
 # Main
@@ -32,45 +48,7 @@ elif [[ -n "$1" ]]; then
     verificar_archivos "$1"
 else
     echo "Uso:"
-    echo "  $0 -g [directorio]   # Genera checksums.sha256"
-    echo "  $0 [directorio]      # Verifica archivos con checksums.sha256"
-    exit 1
-fi
-#!/bin/bash
-
-# f-check: Verifica integridad de archivos usando SHA256
-# Uso:
-#   ./f-check -g [directorio]     -> Genera archivo checksums.sha256
-#   ./f-check [directorio]       -> Verifica integridad de archivos
-
-checksum_file="checksums.sha256"
-
-function generar_sumas() {
-    dir="$1"
-    echo "[+] Generando sumas SHA256 en '$dir'..."
-    find "$dir" -type f ! -name "$checksum_file" -exec sha256sum "{}" \; > "$dir/$checksum_file"
-    echo "[✓] Sumas guardadas en $checksum_file"
-}
-
-function verificar_archivos() {
-    dir="$1"
-    if [[ ! -f "$dir/$checksum_file" ]]; then
-        echo "[!] Archivo de sumas no encontrado: $dir/$checksum_file"
-        exit 1
-    fi
-    echo "[+] Verificando archivos en '$dir'..."
-    cd "$dir" || exit 1
-    sha256sum -c "$checksum_file"
-}
-
-# Main
-if [[ "$1" == "-g" && -n "$2" ]]; then
-    generar_sumas "$2"
-elif [[ -n "$1" ]]; then
-    verificar_archivos "$1"
-else
-    echo "Uso:"
-    echo "  $0 -g [directorio]   # Genera checksums.sha256"
-    echo "  $0 [directorio]      # Verifica archivos con checksums.sha256"
+    echo "  $0 -g [directorio]    # Genera checksums con md5, sha1, sha256 y sha512"
+    echo "  $0 [directorio]       # Verifica checksums"
     exit 1
 fi
