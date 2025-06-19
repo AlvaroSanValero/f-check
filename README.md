@@ -15,3 +15,6 @@ Para ejecutarlo:
 4. Después de transferir, verifica en la máquina destino:./f-check carpeta/ esto imprimirá o un OK o FAILED
 
 Ahora se calculan varios tipos de sumas de verificación: md5, sha1, sha256 y sha512
+
+Ahroa comprueba tambien códigos fuente
+Hay que tener instalado: sudo apt install gcc g++ python3 default-jdk
