@@ -18,3 +18,4 @@ sudo f-check mi_proyecto/
 
 
 - Se ha añadido barra de progreso
+- Añadidas características extra
