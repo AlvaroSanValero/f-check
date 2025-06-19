@@ -1,124 +1,139 @@
 #!/bin/bash
 
-# f-check: Verificador avanzado de archivos y proyectos
+# f-check EXTENDIDO v3.0
+# Autor: ChatGPT personalizado
+# Características: análisis de archivos, sintaxis, estructura, seguridad, heurística de calidad, etc.
 
-# Colores ANSI
-RED='\\033[0;31m'
-GREEN='\\033[0;32m'
-YELLOW='\\033[1;33m'
-BLUE='\\033[1;34m'
-NC='\\033[0m' # Sin color
+RED='\\033[0;31m'; GREEN='\\033[0;32m'; YELLOW='\\033[1;33m'; BLUE='\\033[1;34m'; NC='\\033[0m'
+LOGFILE="/tmp/f-check.log"
+REPORT_HTML=""
+GENERAR_REPORTE=false
+SHOW_VERSION=false
+SHOW_HELP=false
+declare -i TOTAL_OK=0 TOTAL_WARN=0 TOTAL_ERR=0
 
 declare -A hash_cmds=(
   [md5]="md5sum"
   [sha1]="sha1sum"
   [sha256]="sha256sum"
-  [sha512]="sha512sum"
 )
 
-function barra_progreso() {
-    local paso=$1
-    local total=$2
-    local ancho=40
-    local porcentaje=$(( paso * 100 / total ))
-    local relleno=$(( paso * ancho / total ))
-    local vacio=$(( ancho - relleno ))
+function version() {
+  echo "f-check v3.0 - desarrollado por ChatGPT"
+  exit 0
+}
 
-    printf "\\r${BLUE}["
-    printf "${GREEN}%0.s#" $(seq 1 $relleno)
-    printf "${NC}%0.s-" $(seq 1 $vacio)
-    printf "${BLUE}] ${YELLOW}%3d%%${NC}" $porcentaje
+function help() {
+  echo "Uso: f-check [--report] archivo1 archivo2 ..."
+  echo "     f-check -ndir archivo.c"
+  echo "     f-check --version / --help"
+  exit 0
+}
+
+function log() {
+  echo -e "$1" | tee -a "$LOGFILE"
+}
+
+function barra_progreso() {
+  local paso=$1 total=$2 ancho=40
+  local porcentaje=$(( paso * 100 / total ))
+  local relleno=$(( paso * ancho / total ))
+  local vacio=$(( ancho - relleno ))
+
+  printf "\\r${BLUE}["
+  printf "${GREEN}%0.s#" $(seq 1 $relleno)
+  printf "${NC}%0.s-" $(seq 1 $vacio)
+  printf "${BLUE}] ${YELLOW}%3d%%${NC}" $porcentaje
+}
+
+function detectar_codificacion() {
+  enc=$(file -bi "$1" | cut -d= -f2)
+  log "  ${BLUE}Codificación:${NC} $enc"
+}
+
+function heuristica_codigo() {
+  lines=$(wc -l < "$1")
+  comments=$(grep -cE '^\s*#|//|/\*|\*' "$1")
+  todos=$(grep -ciE 'todo|fixme' "$1")
+  funcs=$(grep -cE 'def |function |void |int .*\\(|public .*\\(' "$1")
+  log "  📈 Líneas: $lines | Comentarios: $comments | Funciones: $funcs | TODO/FIXME: $todos"
 }
 
 function analizar_archivo() {
-    file="$1"
-    if [[ ! -f "$file" ]]; then
-        echo -e "${RED}❌ El archivo '$file' no existe.${NC}"
-        return
-    fi
+  local file="$1"
+  [[ ! -f "$file" ]] && log "${RED}❌ No encontrado: $file${NC}" && TOTAL_ERR+=1 && return
 
-    total=5
-    paso=1
+  log "\\n${BLUE}📂 Analizando: $file${NC}"
+  ext="${file##*.}"
 
-    echo -e "${BLUE}📂 Analizando archivo: $file${NC}"
+  for algo in "${!hash_cmds[@]}"; do
+    hval=$("${hash_cmds[$algo]}" "$file" | cut -d' ' -f1)
+    log "  ${YELLOW}${algo}:${NC} $hval"
+  done
 
-    echo -e "\\n[1/$total] 🔐 Hashes:"
-    for algo in "${!hash_cmds[@]}"; do
-        echo -e "  ${YELLOW}$algo:${NC} $("${hash_cmds[$algo]}" "$file" | awk '{print $1}')"
-    done
-    barra_progreso $paso $total; ((paso++)); sleep 0.1
+  detectar_codificacion "$file"
+  heuristica_codigo "$file"
 
-    echo -e "\\n\\n[2/$total] 🔍 Análisis de sintaxis:"
-    ext="${file##*.}"
-    case "$ext" in
-        py)    python3 -m py_compile "$file" && echo -e "  ${GREEN}✅ Python OK${NC}" || echo -e "  ${RED}❌ Error Python${NC}" ;;
-        c)     gcc -fsyntax-only "$file" &>/dev/null && echo -e "  ${GREEN}✅ C OK${NC}" || echo -e "  ${RED}❌ Error C${NC}" ;;
-        cpp)   g++ -fsyntax-only "$file" &>/dev/null && echo -e "  ${GREEN}✅ C++ OK${NC}" || echo -e "  ${RED}❌ Error C++${NC}" ;;
-        java)  javac "$file" &>/dev/null && echo -e "  ${GREEN}✅ Java OK${NC}" || echo -e "  ${RED}❌ Error Java${NC}" ;;
-        sh)    bash -n "$file" && echo -e "  ${GREEN}✅ Bash OK${NC}" || echo -e "  ${RED}❌ Error Bash${NC}" ;;
-        *)     echo -e "  ${YELLOW}ℹ️ Extensión no reconocida para sintaxis.${NC}" ;;
-    esac
-    barra_progreso $paso $total; ((paso++)); sleep 0.1
+  case "$ext" in
+    py) python3 -m py_compile "$file" && status=OK || status=ERR ;;
+    c) gcc -fsyntax-only "$file" &>/dev/null && status=OK || status=ERR ;;
+    cpp) g++ -fsyntax-only "$file" &>/dev/null && status=OK || status=ERR ;;
+    java) javac "$file" &>/dev/null && status=OK || status=ERR ;;
+    sh) bash -n "$file" && status=OK || status=ERR ;;
+    js) node --check "$file" &>/dev/null && status=OK || status=ERR ;;
+    php) php -l "$file" &>/dev/null && status=OK || status=ERR ;;
+    json)
+      python3 -m json.tool "$file" > /dev/null && status=OK || status=ERR ;;
+    yaml|yml)
+      python3 -c "import yaml, sys; yaml.safe_load(sys.stdin)" < "$file" && status=OK || status=ERR ;;
+    html)
+      tidy -q -e "$file" &>/dev/null && status=OK || status=WARN ;;
+    *) status=WARN ;;
+  esac
 
-    echo -e "\\n\\n[3/$total] 🧩 Validación de formato:"
-    case "$ext" in
-        json)
-            python3 -m json.tool "$file" > /dev/null && echo -e "  ${GREEN}✅ JSON válido${NC}" || echo -e "  ${RED}❌ JSON inválido${NC}"
-            ;;
-        yaml|yml)
-            if python3 -c "import yaml" &>/dev/null; then
-                python3 -c "import yaml, sys; yaml.safe_load(sys.stdin)" < "$file" && echo -e "  ${GREEN}✅ YAML válido${NC}" || echo -e "  ${RED}❌ YAML inválido${NC}"
-            else
-                echo -e "  ${YELLOW}⚠️ PyYAML no instalado${NC}"
-            fi
-            ;;
-        html)
-            if command -v tidy &>/dev/null; then
-                tidy -q -e "$file" &>/dev/null && echo -e "  ${GREEN}✅ HTML válido${NC}" || echo -e "  ${YELLOW}⚠️ HTML con advertencias${NC}"
-            else
-                echo -e "  ${YELLOW}⚠️ tidy no instalado${NC}"
-            fi
-            ;;
-        *) echo -e "  ${YELLOW}ℹ️ No es archivo de datos estructurados reconocido${NC}" ;;
-    esac
-    barra_progreso $paso $total; ((paso++)); sleep 0.1
+  case "$status" in
+    OK) log "  ${GREEN}✅ Análisis correcto${NC}" && TOTAL_OK+=1 ;;
+    WARN) log "  ${YELLOW}⚠️ Resultado con advertencias${NC}" && TOTAL_WARN+=1 ;;
+    ERR) log "  ${RED}❌ Error de análisis${NC}" && TOTAL_ERR+=1 ;;
+  esac
 
-    echo -e "\\n\\n[4/$total] 📋 Comentarios:"
-    grep -Ei "autor|author|descripción|description" "$file" > /dev/null \
-        && echo -e "  ${GREEN}✅ Comentario encontrado${NC}" \
-        || echo -e "  ${YELLOW}⚠️ No se encontraron comentarios${NC}"
-    barra_progreso $paso $total; ((paso++)); sleep 0.1
+  if [[ -x "$file" ]]; then
+    log "  ${RED}⚠️ Archivo ejecutable${NC}"
+  fi
 
-    echo -e "\\n\\n[5/$total] 🧹 Limpieza (simulada):"
-    [[ "$file" =~ \.(o|class|out)$ ]] && echo -e "  ${YELLOW}⚠️ Archivo compilado${NC}" || echo -e "  ${GREEN}✅ No parece archivo basura${NC}"
-    barra_progreso $paso $total; ((paso++)); sleep 0.1
+  # Escaneo antivirus si ClamAV está disponible
+  if command -v clamscan &>/dev/null; then
+    scanres=$(clamscan "$file" 2>/dev/null | grep -v "OK$")
+    [[ -n "$scanres" ]] && log "  ${RED}🚨 Posible virus:${NC} $scanres" && TOTAL_WARN+=1
+  fi
+}
 
-    echo -e "\\n\\n${GREEN}✔️ Análisis completo de '$file'${NC}"
+function analizar_directorio() {
+  local dir="$1"
+  find "$dir" -type f ! -path "*/\\.*" ! -path "*/node_modules/*" ! -path "*/__pycache__/*" | while read -r f; do
+    analizar_archivo "$f"
+  done
 }
 
 # MAIN
+[[ "$1" == "--version" ]] && version
+[[ "$1" == "--help" ]] && help
+[[ "$1" == "--report" ]] && GENERAR_REPORTE=true && shift
+[[ "$1" == "-ndir" && -n "$2" ]] && analizar_archivo "$2" && exit 0
 
-if [[ "$1" == "-ndir" && -n "$2" ]]; then
-    analizar_archivo "$2"
-    exit 0
-fi
+[[ $# -eq 0 ]] && help
 
-if [[ $# -eq 0 ]]; then
-    echo -e "${YELLOW}Uso:${NC}"
-    echo -e "  ${GREEN}sudo f-check -ndir archivo.ext${NC}     # Analiza un archivo"
-    echo -e "  ${GREEN}sudo f-check archivo1.ext archivo2.ext${NC}   # Múltiples archivos"
-    exit 1
-fi
-
-# Analizar múltiples archivos
-total_archivos=$#
-archivo_n=1
-for file in "$@"; do
-    echo -e "\\n${BLUE}→ Analizando archivo ${archivo_n}/${total_archivos}: $file${NC}"
-    analizar_archivo "$file"
-    barra_progreso "$archivo_n" "$total_archivos"
-    ((archivo_n++))
-    echo ""
+echo "" > "$LOGFILE"
+n=1
+total=$#
+for arg in "$@"; do
+  echo -e "\\n${YELLOW}[$n/$total] Analizando: $arg${NC}"
+  [[ -d "$arg" ]] && analizar_directorio "$arg" || analizar_archivo "$arg"
+  barra_progreso $n $total
+  ((n++))
 done
 
-echo -e "\\n${GREEN}✔️ Análisis de todos los archivos completado${NC}"
+echo -e "\\n\\n${BLUE}📊 Resumen:${NC}"
+echo -e "  ${GREEN}✔️ Correctos: $TOTAL_OK${NC}"
+echo -e "  ${YELLOW}⚠️ Advertencias: $TOTAL_WARN${NC}"
+echo -e "  ${RED}❌ Errores: $TOTAL_ERR${NC}"
