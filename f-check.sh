@@ -1,9 +1,13 @@
 #!/bin/bash
 
-# f-check: Verificador avanzado de archivos y directorios de código y datos
-# Uso:
-#   sudo f-check -ndir archivo.ext   # Analiza archivo único
-#   sudo f-check directorio/         # Analiza un directorio
+# f-check: Verificador avanzado de archivos y proyectos
+
+# Colores ANSI
+RED='\\033[0;31m'
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+BLUE='\\033[1;34m'
+NC='\\033[0m' # Sin color
 
 declare -A hash_cmds=(
   [md5]="md5sum"
@@ -12,105 +16,109 @@ declare -A hash_cmds=(
   [sha512]="sha512sum"
 )
 
+function barra_progreso() {
+    local paso=$1
+    local total=$2
+    local ancho=40
+    local porcentaje=$(( paso * 100 / total ))
+    local relleno=$(( paso * ancho / total ))
+    local vacio=$(( ancho - relleno ))
+
+    printf "\\r${BLUE}["
+    printf "${GREEN}%0.s#" $(seq 1 $relleno)
+    printf "${NC}%0.s-" $(seq 1 $vacio)
+    printf "${BLUE}] ${YELLOW}%3d%%${NC}" $porcentaje
+}
+
 function analizar_archivo() {
     file="$1"
     if [[ ! -f "$file" ]]; then
-        echo "❌ El archivo '$file' no existe."
-        exit 1
+        echo -e "${RED}❌ El archivo '$file' no existe.${NC}"
+        return
     fi
 
-    echo "📂 Archivo: $file"
+    total=5
+    paso=1
 
-    # Mostrar hashes
-    echo "[🔐] Hashes:"
+    echo -e "${BLUE}📂 Analizando archivo: $file${NC}"
+
+    echo -e "\\n[1/$total] 🔐 Hashes:"
     for algo in "${!hash_cmds[@]}"; do
-        echo "  $algo: $("${hash_cmds[$algo]}" "$file" | awk '{print $1}')"
+        echo -e "  ${YELLOW}$algo:${NC} $("${hash_cmds[$algo]}" "$file" | awk '{print $1}')"
     done
+    barra_progreso $paso $total; ((paso++)); sleep 0.1
 
-    # Analizar sintaxis si es código fuente
+    echo -e "\\n\\n[2/$total] 🔍 Análisis de sintaxis:"
     ext="${file##*.}"
-    echo "[🔍] Análisis de código ($ext):"
     case "$ext" in
-        py)
-            python3 -m py_compile "$file" && echo "  ✅ Python OK" || echo "  ❌ Error en Python"
-            ;;
-        c)
-            gcc -fsyntax-only "$file" &>/dev/null && echo "  ✅ C OK" || echo "  ❌ Error en C"
-            ;;
-        cpp)
-            g++ -fsyntax-only "$file" &>/dev/null && echo "  ✅ C++ OK" || echo "  ❌ Error en C++"
-            ;;
-        java)
-            javac "$file" &>/dev/null && echo "  ✅ Java OK" || echo "  ❌ Error en Java"
-            ;;
-        sh)
-            bash -n "$file" && echo "  ✅ Bash OK" || echo "  ❌ Error en Bash"
-            ;;
-        *)
-            echo "  ℹ️ Archivo no es código fuente reconocido."
-            ;;
+        py)    python3 -m py_compile "$file" && echo -e "  ${GREEN}✅ Python OK${NC}" || echo -e "  ${RED}❌ Error Python${NC}" ;;
+        c)     gcc -fsyntax-only "$file" &>/dev/null && echo -e "  ${GREEN}✅ C OK${NC}" || echo -e "  ${RED}❌ Error C${NC}" ;;
+        cpp)   g++ -fsyntax-only "$file" &>/dev/null && echo -e "  ${GREEN}✅ C++ OK${NC}" || echo -e "  ${RED}❌ Error C++${NC}" ;;
+        java)  javac "$file" &>/dev/null && echo -e "  ${GREEN}✅ Java OK${NC}" || echo -e "  ${RED}❌ Error Java${NC}" ;;
+        sh)    bash -n "$file" && echo -e "  ${GREEN}✅ Bash OK${NC}" || echo -e "  ${RED}❌ Error Bash${NC}" ;;
+        *)     echo -e "  ${YELLOW}ℹ️ Extensión no reconocida para sintaxis.${NC}" ;;
     esac
+    barra_progreso $paso $total; ((paso++)); sleep 0.1
 
-    # Validar JSON/YAML/HTML
-    echo "[🧩] Validación de formato:"
+    echo -e "\\n\\n[3/$total] 🧩 Validación de formato:"
     case "$ext" in
         json)
-            python3 -m json.tool "$file" > /dev/null && echo "  ✅ JSON válido" || echo "  ❌ JSON inválido"
+            python3 -m json.tool "$file" > /dev/null && echo -e "  ${GREEN}✅ JSON válido${NC}" || echo -e "  ${RED}❌ JSON inválido${NC}"
             ;;
         yaml|yml)
             if python3 -c "import yaml" &>/dev/null; then
-                python3 -c "import yaml, sys; yaml.safe_load(sys.stdin)" < "$file" && echo "  ✅ YAML válido" || echo "  ❌ YAML inválido"
+                python3 -c "import yaml, sys; yaml.safe_load(sys.stdin)" < "$file" && echo -e "  ${GREEN}✅ YAML válido${NC}" || echo -e "  ${RED}❌ YAML inválido${NC}"
             else
-                echo "  ⚠️ PyYAML no instalado"
+                echo -e "  ${YELLOW}⚠️ PyYAML no instalado${NC}"
             fi
             ;;
         html)
             if command -v tidy &>/dev/null; then
-                tidy -q -e "$file" &>/dev/null && echo "  ✅ HTML válido" || echo "  ⚠️ HTML con advertencias"
+                tidy -q -e "$file" &>/dev/null && echo -e "  ${GREEN}✅ HTML válido${NC}" || echo -e "  ${YELLOW}⚠️ HTML con advertencias${NC}"
             else
-                echo "  ⚠️ tidy no instalado"
+                echo -e "  ${YELLOW}⚠️ tidy no instalado${NC}"
             fi
             ;;
-        *)
-            echo "  ℹ️ No es archivo de datos web reconocido"
-            ;;
+        *) echo -e "  ${YELLOW}ℹ️ No es archivo de datos estructurados reconocido${NC}" ;;
     esac
+    barra_progreso $paso $total; ((paso++)); sleep 0.1
 
-    # Verificar comentarios/documentación
-    echo "[📋] Comentarios:"
+    echo -e "\\n\\n[4/$total] 📋 Comentarios:"
     grep -Ei "autor|author|descripción|description" "$file" > /dev/null \
-        && echo "  ✅ Comentario encontrado" \
-        || echo "  ⚠️ No se encontraron comentarios tipo cabecera"
+        && echo -e "  ${GREEN}✅ Comentario encontrado${NC}" \
+        || echo -e "  ${YELLOW}⚠️ No se encontraron comentarios${NC}"
+    barra_progreso $paso $total; ((paso++)); sleep 0.1
 
-    echo "[✔️] Análisis completo del archivo '$file'"
+    echo -e "\\n\\n[5/$total] 🧹 Limpieza (simulada):"
+    [[ "$file" =~ \.(o|class|out)$ ]] && echo -e "  ${YELLOW}⚠️ Archivo compilado${NC}" || echo -e "  ${GREEN}✅ No parece archivo basura${NC}"
+    barra_progreso $paso $total; ((paso++)); sleep 0.1
+
+    echo -e "\\n\\n${GREEN}✔️ Análisis completo de '$file'${NC}"
 }
-
-function analizar_directorio() {
-    dir="$1"
-    if [[ ! -d "$dir" ]]; then
-        echo "❌ El directorio '$dir' no existe."
-        exit 1
-    fi
-
-    verificar_hashes "$dir"
-    verificar_codigo_fuente "$dir"
-    ejecutar_pruebas "$dir"
-    verificar_comentarios "$dir"
-    verificar_datos_web "$dir"
-    limpiar_basura "$dir"
-}
-
-# Añadir aquí las funciones ya definidas como verificar_hashes, etc.
-# (omitidas para no duplicar, pero las tomamos del script anterior)
 
 # MAIN
+
 if [[ "$1" == "-ndir" && -n "$2" ]]; then
     analizar_archivo "$2"
-elif [[ -n "$1" ]]; then
-    analizar_directorio "$1"
-else
-    echo "Uso:"
-    echo "  sudo f-check -ndir archivo.ext     # Analiza archivo único"
-    echo "  sudo f-check directorio/           # Analiza un proyecto completo"
+    exit 0
+fi
+
+if [[ $# -eq 0 ]]; then
+    echo -e "${YELLOW}Uso:${NC}"
+    echo -e "  ${GREEN}sudo f-check -ndir archivo.ext${NC}     # Analiza un archivo"
+    echo -e "  ${GREEN}sudo f-check archivo1.ext archivo2.ext${NC}   # Múltiples archivos"
     exit 1
 fi
+
+# Analizar múltiples archivos
+total_archivos=$#
+archivo_n=1
+for file in "$@"; do
+    echo -e "\\n${BLUE}→ Analizando archivo ${archivo_n}/${total_archivos}: $file${NC}"
+    analizar_archivo "$file"
+    barra_progreso "$archivo_n" "$total_archivos"
+    ((archivo_n++))
+    echo ""
+done
+
+echo -e "\\n${GREEN}✔️ Análisis de todos los archivos completado${NC}"
