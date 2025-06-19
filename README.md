@@ -13,3 +13,5 @@ Para ejecutarlo:
 2. ./f-check -g carpeta/
 3. Transfiere la carpeta a otra máquina.
 4. Después de transferir, verifica en la máquina destino:./f-check carpeta/ esto imprimirá o un OK o FAILED
+
+Ahora se calculan varios tipos de sumas de verificación: md5, sha1, sha256 y sha512
